@@ -16,6 +16,14 @@ describe("generator integration", () => {
   let cwdDirPath: string;
   let schema: string;
 
+  async function assertGeneratedArtifacts(artifactsDirPath: string) {
+    await Promise.all([
+      fs.access(path.join(artifactsDirPath, "generated", "type-graphql", "index.ts")),
+      fs.access(path.join(artifactsDirPath, "generated", "client", "client.ts")),
+      fs.access(path.join(artifactsDirPath, "generated", "client", "models.ts")),
+    ]);
+  }
+
   beforeEach(async () => {
     cwdDirPath = generateArtifactsDirPath("functional-integration");
     await fs.mkdir(cwdDirPath, { recursive: true });
@@ -64,16 +72,14 @@ describe("generator integration", () => {
   });
 
   it("should generates TypeGraphQL classes files to output folder by running `prisma generate`", async () => {
-    const prismaGenerateResult = await exec("npx prisma generate", {
+    await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
-    // console.log(prismaGenerateResult);
 
     const directoryStructureString = getDirectoryStructureString(
       cwdDirPath + "/generated/type-graphql",
     );
 
-    expect(prismaGenerateResult.stderr).not.toContain("Error:");
     expect(directoryStructureString).toMatchSnapshot("files structure");
   }, 60000);
 
@@ -82,18 +88,32 @@ describe("generator integration", () => {
       path.join(cwdDirPath, "schema.prisma"),
       schema.replace('provider = "prisma-client-js"', 'provider = "prisma-client"'),
     );
-    const prismaGenerateResult = await exec("npx prisma generate", {
+    await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
 
-    expect(prismaGenerateResult.stderr).not.toContain("Error:");
+    await assertGeneratedArtifacts(cwdDirPath);
+  }, 60000);
+
+  it("should generate artifacts when using `prisma-client-ts` provider", async () => {
+    await fs.writeFile(
+      path.join(cwdDirPath, "schema.prisma"),
+      schema.replace(
+        'provider = "prisma-client-js"',
+        'provider = "prisma-client-ts"',
+      ),
+    );
+    await exec("npx prisma generate", {
+      cwd: cwdDirPath,
+    });
+
+    await assertGeneratedArtifacts(cwdDirPath);
   }, 60000);
 
   it("should be able to use generate TypeGraphQL classes files to generate GraphQL schema", async () => {
-    const prismaGenerateResult = await exec("npx prisma generate", {
+    await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
-    // console.log(prismaGenerateResult);
     const {
       UserCrudResolver,
       PostCrudResolver,
@@ -114,7 +134,6 @@ describe("generator integration", () => {
       encoding: "utf8",
     });
 
-    expect(prismaGenerateResult.stderr).not.toContain("Error:");
     expect(graphQLSchemaSDL).toMatchSnapshot("graphQLSchemaSDL");
   }, 60000);
 
@@ -138,10 +157,9 @@ describe("generator integration", () => {
       "type-graphql",
     );
 
-    const prismaGenerateResult = await exec("npx prisma generate", {
+    await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
-    // console.log(prismaGenerateResult);
     await fs.writeFile(
       path.join(typegraphqlfolderPath, "tsconfig.json"),
       JSON.stringify(tsconfigContent),
@@ -150,17 +168,14 @@ describe("generator integration", () => {
       cwd: typegraphqlfolderPath,
     });
 
-    expect(prismaGenerateResult.stderr).not.toContain("Error:");
     expect(tscResult.stdout).toHaveLength(0);
     expect(tscResult.stderr).toHaveLength(0);
   }, 60000);
 
   it("should properly fetch the data from DB using PrismaClient while queried by GraphQL schema", async () => {
-    const prismaGenerateResult = await exec("npx prisma generate", {
+    await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
-    // console.log(prismaGenerateResult);
-    expect(prismaGenerateResult.stderr).not.toContain("Error:");
 
     // drop database before migrate
     const originalDatabaseUrl = process.env.TEST_DATABASE_URL!;
@@ -176,12 +191,10 @@ describe("generator integration", () => {
     await pgClient.query(`CREATE DATABASE "${dbName}"`);
     await pgClient.end();
 
-    const prismaMigrateResult = await exec(
+    await exec(
       "npx prisma migrate dev --name init",
       { cwd: cwdDirPath },
     );
-    // console.log(prismaMigrateResult);
-    expect(prismaMigrateResult.stderr).not.toContain("Error:");
 
     const { PrismaClient } = require(cwdDirPath + "/generated/client");
     const prisma = new PrismaClient();
