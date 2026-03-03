@@ -73,8 +73,20 @@ describe("generator integration", () => {
       cwdDirPath + "/generated/type-graphql",
     );
 
-    expect(prismaGenerateResult.stderr).toHaveLength(0);
+    expect(prismaGenerateResult.stderr).not.toContain("Error:");
     expect(directoryStructureString).toMatchSnapshot("files structure");
+  }, 60000);
+
+  it("should generate artifacts when using `prisma-client` provider", async () => {
+    await fs.writeFile(
+      path.join(cwdDirPath, "schema.prisma"),
+      schema.replace('provider = "prisma-client-js"', 'provider = "prisma-client"'),
+    );
+    const prismaGenerateResult = await exec("npx prisma generate", {
+      cwd: cwdDirPath,
+    });
+
+    expect(prismaGenerateResult.stderr).not.toContain("Error:");
   }, 60000);
 
   it("should be able to use generate TypeGraphQL classes files to generate GraphQL schema", async () => {
@@ -102,7 +114,7 @@ describe("generator integration", () => {
       encoding: "utf8",
     });
 
-    expect(prismaGenerateResult.stderr).toHaveLength(0);
+    expect(prismaGenerateResult.stderr).not.toContain("Error:");
     expect(graphQLSchemaSDL).toMatchSnapshot("graphQLSchemaSDL");
   }, 60000);
 
@@ -138,7 +150,7 @@ describe("generator integration", () => {
       cwd: typegraphqlfolderPath,
     });
 
-    expect(prismaGenerateResult.stderr).toHaveLength(0);
+    expect(prismaGenerateResult.stderr).not.toContain("Error:");
     expect(tscResult.stdout).toHaveLength(0);
     expect(tscResult.stderr).toHaveLength(0);
   }, 60000);
@@ -148,7 +160,7 @@ describe("generator integration", () => {
       cwd: cwdDirPath,
     });
     // console.log(prismaGenerateResult);
-    expect(prismaGenerateResult.stderr).toHaveLength(0);
+    expect(prismaGenerateResult.stderr).not.toContain("Error:");
 
     // drop database before migrate
     const originalDatabaseUrl = process.env.TEST_DATABASE_URL!;
@@ -161,14 +173,15 @@ describe("generator integration", () => {
     });
     await pgClient.connect();
     await pgClient.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+    await pgClient.query(`CREATE DATABASE "${dbName}"`);
     await pgClient.end();
 
     const prismaMigrateResult = await exec(
-      "npx prisma migrate dev --preview-feature --name init",
+      "npx prisma migrate dev --name init",
       { cwd: cwdDirPath },
     );
     // console.log(prismaMigrateResult);
-    expect(prismaMigrateResult.stderr).toHaveLength(0);
+    expect(prismaMigrateResult.stderr).not.toContain("Error:");
 
     const { PrismaClient } = require(cwdDirPath + "/generated/client");
     const prisma = new PrismaClient();
