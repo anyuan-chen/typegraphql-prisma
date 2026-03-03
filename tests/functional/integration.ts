@@ -12,15 +12,35 @@ import { getDirectoryStructureString } from "../helpers/structure";
 
 const exec = util.promisify(childProcess.exec);
 
+function normalizePrismaStderr(stderr: string) {
+  return stderr
+    .split(/\r?\n/)
+    .filter(
+      line => !line.trim().startsWith("Environment variables loaded from"),
+    )
+    .join("\n")
+    .trim();
+}
+
+function expectNoPrismaStderr(stderr: string) {
+  expect(normalizePrismaStderr(stderr)).toHaveLength(0);
+}
+
 describe("generator integration", () => {
   let cwdDirPath: string;
   let schema: string;
 
   async function assertGeneratedArtifacts(artifactsDirPath: string) {
     await Promise.all([
-      fs.access(path.join(artifactsDirPath, "generated", "type-graphql", "index.ts")),
-      fs.access(path.join(artifactsDirPath, "generated", "client", "client.ts")),
-      fs.access(path.join(artifactsDirPath, "generated", "client", "models.ts")),
+      fs.access(
+        path.join(artifactsDirPath, "generated", "type-graphql", "index.ts"),
+      ),
+      fs.access(
+        path.join(artifactsDirPath, "generated", "client", "client.ts"),
+      ),
+      fs.access(
+        path.join(artifactsDirPath, "generated", "client", "models.ts"),
+      ),
     ]);
   }
 
@@ -72,9 +92,10 @@ describe("generator integration", () => {
   });
 
   it("should generates TypeGraphQL classes files to output folder by running `prisma generate`", async () => {
-    await exec("npx prisma generate", {
+    const prismaGenerateResult = await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
+    expectNoPrismaStderr(prismaGenerateResult.stderr);
 
     const directoryStructureString = getDirectoryStructureString(
       cwdDirPath + "/generated/type-graphql",
@@ -86,11 +107,15 @@ describe("generator integration", () => {
   it("should generate artifacts when using `prisma-client` provider", async () => {
     await fs.writeFile(
       path.join(cwdDirPath, "schema.prisma"),
-      schema.replace('provider = "prisma-client-js"', 'provider = "prisma-client"'),
+      schema.replace(
+        'provider = "prisma-client-js"',
+        'provider = "prisma-client"',
+      ),
     );
-    await exec("npx prisma generate", {
+    const prismaGenerateResult = await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
+    expectNoPrismaStderr(prismaGenerateResult.stderr);
 
     await assertGeneratedArtifacts(cwdDirPath);
   }, 60000);
@@ -103,17 +128,19 @@ describe("generator integration", () => {
         'provider = "prisma-client-ts"',
       ),
     );
-    await exec("npx prisma generate", {
+    const prismaGenerateResult = await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
+    expectNoPrismaStderr(prismaGenerateResult.stderr);
 
     await assertGeneratedArtifacts(cwdDirPath);
   }, 60000);
 
   it("should be able to use generate TypeGraphQL classes files to generate GraphQL schema", async () => {
-    await exec("npx prisma generate", {
+    const prismaGenerateResult = await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
+    expectNoPrismaStderr(prismaGenerateResult.stderr);
     const {
       UserCrudResolver,
       PostCrudResolver,
@@ -157,9 +184,10 @@ describe("generator integration", () => {
       "type-graphql",
     );
 
-    await exec("npx prisma generate", {
+    const prismaGenerateResult = await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
+    expectNoPrismaStderr(prismaGenerateResult.stderr);
     await fs.writeFile(
       path.join(typegraphqlfolderPath, "tsconfig.json"),
       JSON.stringify(tsconfigContent),
@@ -173,9 +201,10 @@ describe("generator integration", () => {
   }, 60000);
 
   it("should properly fetch the data from DB using PrismaClient while queried by GraphQL schema", async () => {
-    await exec("npx prisma generate", {
+    const prismaGenerateResult = await exec("npx prisma generate", {
       cwd: cwdDirPath,
     });
+    expectNoPrismaStderr(prismaGenerateResult.stderr);
 
     // drop database before migrate
     const originalDatabaseUrl = process.env.TEST_DATABASE_URL!;
@@ -191,10 +220,11 @@ describe("generator integration", () => {
     await pgClient.query(`CREATE DATABASE "${dbName}"`);
     await pgClient.end();
 
-    await exec(
+    const prismaMigrateResult = await exec(
       "npx prisma migrate dev --name init",
       { cwd: cwdDirPath },
     );
+    expectNoPrismaStderr(prismaMigrateResult.stderr);
 
     const { PrismaClient } = require(cwdDirPath + "/generated/client");
     const prisma = new PrismaClient();
